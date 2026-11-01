@@ -1,14 +1,12 @@
-from app.modules.forms.schemas import CreateFormPayload, SubmissionPayload
+from app.modules.forms.schemas import CreateFormPayload
 from datetime import datetime, timezone
 from sqlalchemy import select, or_, func
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.modules.forms.models import (Form, FormSection, FormSettings, FormStatus, QuizSettings,
-    Submission, SubmissionAnswer, SubmissionStatus)
+from app.modules.forms.models import (Form, FormSection, FormSettings, FormStatus, QuizSettings)
 from app.modules.auth.schemas import GetGuestResponse
 from fastapi.exceptions import HTTPException
 from fastapi import status
-from app.modules.auth.models import GuestSession
 
 async def create_form(payload: CreateFormPayload, session: GetGuestResponse, db: AsyncSession) :
 
@@ -24,6 +22,19 @@ async def create_form(payload: CreateFormPayload, session: GetGuestResponse, db:
     await db.commit()
     await db.refresh(form)
     return form
+
+
+async def get_form(id: str, session: GetGuestResponse, db: AsyncSession):
+
+    form = await db.execute(select(Form).where(
+        Form.id == id,
+        or_(Form.owner_id == session["user_id"], Form.guest_session_id == session["session_id"])
+    ))
+
+    if not form:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Form not found")
+
+    return form.scalar_one_or_none()
 
 async def get_all_forms(session: GetGuestResponse, db: AsyncSession):
     result = await db.execute(
@@ -90,6 +101,7 @@ async def get_all_forms_query(query: dict, session: GetGuestResponse, db: AsyncS
         "total_pages": (total + limit - 1) // limit if total else 0
     }
 
+
 async def get_single_form(id: str, session: GetGuestResponse, db: AsyncSession):
     result = await db.execute(
         select(Form).options(
@@ -105,7 +117,7 @@ async def get_single_form(id: str, session: GetGuestResponse, db: AsyncSession):
     form = result.scalar_one_or_none()
 
     if not form:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Form not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Form not found")
 
     return form
 
@@ -127,36 +139,3 @@ async def get_quiz_settings(id: str, db: AsyncSession):
     quiz_settings = await db.execute(select(QuizSettings).where(QuizSettings.id == id))
 
     return quiz_settings.scalar_one_or_none()
-
-async def store_submission(form_id: str, user_id: str, payload: SubmissionPayload, db: AsyncSession):
-
-    form = await db.execute(select(Form).where(Form.id == form_id))
-    user_id = user_id or None
-
-    if not form:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Form not found")
-
-    submission = Submission(
-        form_id=form_id,
-        respondent_id=user_id,
-        status=SubmissionStatus.SUBMITTED,
-        submitted_at=datetime.now(timezone.utc),
-        respondent_metadata=payload.respondent_metadata,
-    )
-
-    await db.flush()
-
-    submission_id = submission.id
-
-    for ans in (payload.answers or []):
-        answer = SubmissionAnswer(
-            submission_id=submission_id,
-            field_id=ans.field_id,
-            answer_text=ans.answer_text,
-            answer_json=ans.answer_json,
-        )
-        db.add(answer)
-
-    await db.commit()
-
-    return submission

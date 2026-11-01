@@ -30,21 +30,39 @@ class Form(Base):
     slug: Mapped[str | None] = mapped_column(String(255), unique=True, nullable=True)
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    user = relationship("User", back_populates="forms")
-    form_settings = relationship("FormSettings", back_populates="form", uselist=False, cascade="all, delete-orphan")
-    sections = relationship("FormSection", back_populates="form", cascade="all, delete-orphan")
-    fields = relationship("FormField", back_populates="form", cascade="all, delete-orphan")
-    quiz_settings = relationship("QuizSettings", back_populates="form", uselist=False, cascade="all, delete-orphan")
-    field_conditions = relationship("FieldConditions", back_populates="form", cascade="all, delete-orphan")
-    form_collaborators = relationship("FormCollaborator", back_populates="form", cascade="all, delete-orphan")
-    form_share_links = relationship("FormShareLink", back_populates="form", cascade="all, delete-orphan")
-    guest_session = relationship("GuestSession", back_populates="forms")
-    submissions = relationship("Submission", back_populates="form", cascade="all, delete-orphan")
+    current_published_version_id: Mapped[UUID | None] = mapped_column(
+        UUID(as_uuid=True), 
+        ForeignKey(
+            "form_versions.id",
+            name="fk_forms_current_published_version_id",
+            ondelete="SET NULL",
+            use_alter=True,
+        ), 
+        nullable=True
+    )
+
+    # Owners of the form
+    user = relationship("User", back_populates="forms", foreign_keys=[owner_id])
+    guest_session = relationship("GuestSession", back_populates="forms", foreign_keys=[guest_session_id])
+
+    # Form contents
+    form_settings = relationship("FormSettings", back_populates="form", uselist=False, foreign_keys="FormSettings.form_id", cascade="all, delete-orphan", passive_deletes=True)
+    sections = relationship("FormSection", back_populates="form", foreign_keys="FormSection.form_id", cascade="all, delete-orphan", passive_deletes=True)
+    fields = relationship("FormField", back_populates="form", foreign_keys="FormField.form_id", cascade="all, delete-orphan", passive_deletes=True)
+    quiz_settings = relationship("QuizSettings", back_populates="form", foreign_keys="QuizSettings.form_id", uselist=False, cascade="all, delete-orphan", passive_deletes=True)
+    form_collaborators = relationship("FormCollaborator", back_populates="form", foreign_keys="FormCollaborator.form_id", cascade="all, delete-orphan", passive_deletes=True)
+    form_share_links = relationship("FormShareLink", back_populates="form", foreign_keys="FormShareLink.form_id", cascade="all, delete-orphan", passive_deletes=True)
+
+    # Form versions
+    versions = relationship("FormVersions", back_populates="form", foreign_keys="FormVersion.form_id", cascade="all, delete-orphan", passive_deletes=True)
+    current_published_version = relationship("FormVersions", foreign_keys=[current_published_version_id], post_update=True)
+
+    submissions = relationship("Submission", foreign_keys="Submission.id", back_populates="form", cascade="all, delete-orphan", passive_deletes=True)
 
 class FormSettings(Base):
     __tablename__ = "form_settings"
 
-    form_id: Mapped[UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("forms.id"), nullable=False)
+    form_id: Mapped[UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("forms.id", ondelete="CASCADE"), index=True, nullable=False)
     confirmation_message: Mapped[str | None] = mapped_column(String, nullable=True)
     allow_multiple_submission: Mapped[bool] = mapped_column(Boolean, default=False)
     require_login: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -54,7 +72,7 @@ class FormSettings(Base):
     start_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     end_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    form = relationship("Form", back_populates="form_settings")
+    form = relationship("Form", foreign_keys=[form_id], back_populates="form_settings")
 
     __table_args__ = (
         CheckConstraint(
@@ -69,7 +87,7 @@ class LayoutType(Enum):
 class FormSection(Base):
     __tablename__ = "sections"
 
-    form_id: Mapped[UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("forms.id"), nullable=False)
+    form_id: Mapped[UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("forms.id", ondelete="CASCADE"), index=True, nullable=False)
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(String, nullable=True)
     position: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
@@ -78,8 +96,8 @@ class FormSection(Base):
     layout_config: Mapped[dict] = mapped_column(JSONB, default={})
     is_visible: Mapped[bool] = mapped_column(Boolean, default=True)
 
-    form = relationship("Form", back_populates="sections")
-    fields = relationship("FormField", back_populates="section", cascade="all, delete-orphan")
+    form = relationship("Form", foreign_keys=[form_id], back_populates="sections")
+    fields = relationship("FormField", back_populates="section", cascade="all, delete-orphan", passive_deletes=True)
 
     __table_args__ = (
         CheckConstraint(
@@ -109,7 +127,7 @@ class FieldType(Enum):
 class FormField(Base):
     __tablename__ = "fields"
 
-    form_id: Mapped[UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("forms.id"), nullable=True)
+    form_id: Mapped[UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("forms.id", ondelete="CASCADE"), index=True, nullable=True)
     section_id: Mapped[UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("sections.id"), nullable=True)
     label: Mapped[str] = mapped_column(String(500), nullable=False)
     description: Mapped[str | None] = mapped_column(String, nullable=True)
@@ -122,25 +140,25 @@ class FormField(Base):
     default_values: Mapped[dict] = mapped_column(JSONB, nullable=True)
     settings: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
     
-    form = relationship("Form", back_populates="fields")
-    section = relationship("FormSection", back_populates="fields")
-    field_scoring = relationship("FieldScoring", back_populates="fields", cascade="all, delete-orphan")
-    field_answer_key = relationship("FieldAnswerKey", back_populates="fields", cascade="all, delete-orphan")
-    conditions_as_source = relationship("FieldConditions", foreign_keys="FieldConditions.source_field_id", back_populates="source_field", cascade="all, delete-orphan")
-    conditions_as_target = relationship("FieldConditions", foreign_keys="FieldConditions.target_field_id", back_populates="target_field", cascade="all, delete-orphan")
-    submission_answers = relationship("SubmissionAnswer", back_populates="field", cascade="all, delete-orphan")
+    form = relationship("Form", foreign_keys=[form_id], back_populates="fields")
+    section = relationship("FormSection", foreign_keys=[section_id], back_populates="fields")
+    field_scoring = relationship("FieldScoring", foreign_keys="FieldScoring.id", back_populates="fields", cascade="all, delete-orphan", passive_deletes=True)
+    field_answer_key = relationship("FieldAnswerKey", foreign_keys="FieldAnswerKey.id", back_populates="fields", cascade="all, delete-orphan", passive_deletes=True)
+    conditions_as_source = relationship("FieldConditions", foreign_keys="FieldConditions.source_field_id", back_populates="source_field", cascade="all, delete-orphan", passive_deletes=True)
+    conditions_as_target = relationship("FieldConditions", foreign_keys="FieldConditions.target_field_id", back_populates="target_field", cascade="all, delete-orphan", passive_deletes=True)
+    submission_answers = relationship("SubmissionAnswer", back_populates="field", cascade="all, delete-orphan", passive_deletes=True)
 
 class QuizSettings(Base):
     __tablename__ = "quiz_settings"
 
-    form_id: Mapped[UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("forms.id"), nullable=False)
+    form_id: Mapped[UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("forms.id", ondelete="CASCADE"), index=True, nullable=False)
     time_limit: Mapped[int | None] = mapped_column(Integer, nullable=True)
     passing_score: Mapped[Decimal] = mapped_column(Numeric(5, 2), default=Decimal("0"), nullable=False)
     total_attempts: Mapped[int | None] = mapped_column(Integer, nullable=True)
     show_correct_answers : Mapped[bool] = mapped_column(Boolean, default=False)
     show_score_after_submissions: Mapped[bool] = mapped_column(Boolean, default=True)
 
-    form = relationship("Form", back_populates="quiz_settings")
+    form = relationship("Form", foreign_keys=[form_id], back_populates="quiz_settings")
 
     __table_args__ = (
         CheckConstraint(
@@ -164,7 +182,7 @@ class FieldAnswerKey(Base):
     correct_answer: Mapped[dict] = mapped_column(JSONB, nullable=False)
     explanation: Mapped[str] = mapped_column(String, nullable=True)
 
-    fields = relationship("FormField", back_populates="field_answer_key")
+    fields = relationship("FormField", foreign_keys=[field_id], back_populates="field_answer_key")
 
 
 class FieldScoring(Base):
@@ -174,7 +192,7 @@ class FieldScoring(Base):
     points: Mapped[Decimal] = mapped_column(Numeric(8, 2), default=1)
     allow_partial_credit: Mapped[bool] = mapped_column(Boolean, default=False)
 
-    fields = relationship("FormField", back_populates="field_scoring")
+    fields = relationship("FormField", foreign_keys=[field_id], back_populates="field_scoring")
 
     __table_args__ = (
         CheckConstraint(
@@ -198,14 +216,12 @@ class ConditionActions(Enum):
 class FieldConditions(Base):
     __tablename__ = "field_conditions"
 
-    form_id: Mapped[UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("forms.id"), nullable=False)
     source_field_id: Mapped[UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("fields.id"), nullable=False)
     target_field_id: Mapped[UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("fields.id"), nullable=False)
     condition_operator: Mapped[Enum] = mapped_column(SQLAlchemyEnum(ConditionOperator, name="condition_operator"), nullable=False)
     condition_value: Mapped[dict] = mapped_column(JSONB, nullable=False)
     action: Mapped[ConditionActions] = mapped_column(SQLAlchemyEnum(ConditionActions, name="action"), nullable=False)
 
-    form = relationship("Form", back_populates="field_conditions")
     source_field = relationship("FormField", foreign_keys=[source_field_id], back_populates="conditions_as_source")
     target_field = relationship("FormField", foreign_keys=[target_field_id], back_populates="conditions_as_target")
 
@@ -218,22 +234,22 @@ class CollabRole(Enum):
 class FormCollaborator(Base):
     __tablename__ = "form_collaborators"
 
-    form_id: Mapped[UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("forms.id"), nullable=False)
+    form_id: Mapped[UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("forms.id", ondelete="CASCADE"), index=True, nullable=False)
     user_id: Mapped[UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
     role: Mapped[CollabRole] = mapped_column(SQLAlchemyEnum(CollabRole, name="role"), nullable=False, default=CollabRole.VIEWER)
 
-    user = relationship("User", back_populates="form_collaborators")
-    form = relationship("Form", back_populates="form_collaborators")
+    user = relationship("User", foreign_keys=[user_id], back_populates="form_collaborators")
+    form = relationship("Form", foreign_keys=[form_id], back_populates="form_collaborators")
 
 class FormShareLink(Base):
     __tablename__ = "form_share_links"
 
-    form_id: Mapped[UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("forms.id"), nullable=False)
+    form_id: Mapped[UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("forms.id", ondelete="CASCADE"), index=True, nullable=False)
     token: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
     expires_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
-    form = relationship("Form", back_populates="form_share_links")
+    form = relationship("Form", foreign_keys=[form_id], back_populates="form_share_links")
 
 class SubmissionStatus(Enum):
     IN_PROGRESS = "IN_PROGRESS"
@@ -243,7 +259,7 @@ class SubmissionStatus(Enum):
 class Submission(Base):
     __tablename__ = "submissions"
 
-    form_id: Mapped[UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("forms.id"), nullable=False)
+    form_id: Mapped[UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("forms.id", ondelete="CASCADE"), index=True, nullable=False)
     respondent_id: Mapped[UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
     response_number: Mapped[int] = mapped_column(Integer, nullable=True)
     status: Mapped[SubmissionStatus] = mapped_column(SQLAlchemyEnum(SubmissionStatus, name="status"), nullable=False, default=SubmissionStatus.IN_PROGRESS)
@@ -251,9 +267,9 @@ class Submission(Base):
     submitted_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), nullable=True)
     respondent_metadata: Mapped[JSONB] = mapped_column(JSONB, nullable=True, default={})
 
-    form = relationship("Form", back_populates="submissions")
-    user = relationship("User", back_populates="submissions")
-    submission_answers = relationship("SubmissionAnswer", back_populates="submission", cascade="all, delete-orphan")
+    form = relationship("Form", foreign_keys=[form_id], back_populates="submissions")
+    user = relationship("User", foreign_keys=[respondent_id], back_populates="submissions")
+    submission_answers = relationship("SubmissionAnswer", foreign_keys="SubmissionAnswer.id", back_populates="submission", cascade="all, delete-orphan", passive_deletes=True)
 
 class SubmissionAnswer(Base):
     __tablename__ = "submission_answers"
@@ -263,5 +279,5 @@ class SubmissionAnswer(Base):
     answer_text: Mapped[str] = mapped_column(String, nullable=True)
     answer_json: Mapped[JSONB] = mapped_column(JSONB, nullable=True)
 
-    submission = relationship("Submission", back_populates="submission_answers")
-    field = relationship("FormField", back_populates="submission_answers")
+    submission = relationship("Submission", foreign_keys=[submission_id], back_populates="submission_answers")
+    field = relationship("FormField", foreign_keys=[field_id], back_populates="submission_answers")

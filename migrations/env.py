@@ -11,6 +11,7 @@ import os
 
 from app.modules.auth import models as auth_models
 from app.modules.forms import models as forms_models
+from app.modules.form_versioning import models as form_versioning_models
 
 load_dotenv()
 

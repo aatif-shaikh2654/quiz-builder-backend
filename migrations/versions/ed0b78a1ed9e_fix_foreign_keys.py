@@ -1,8 +1,8 @@
-"""submission model fix
+"""fix foreign keys
 
-Revision ID: f6fffcbbc0a0
-Revises: 926c5c21d0a8
-Create Date: 2026-10-28 22:38:04.355854
+Revision ID: ed0b78a1ed9e
+Revises: 9fb0800bcd79
+Create Date: 2026-11-01 22:03:43.907862
 
 """
 from typing import Sequence, Union
@@ -12,8 +12,8 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = 'f6fffcbbc0a0'
-down_revision: Union[str, Sequence[str], None] = '926c5c21d0a8'
+revision: str = 'ed0b78a1ed9e'
+down_revision: Union[str, Sequence[str], None] = '9fb0800bcd79'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

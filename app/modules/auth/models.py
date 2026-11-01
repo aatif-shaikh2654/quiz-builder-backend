@@ -22,8 +22,8 @@ class User(Base):
     is_email_verified: Mapped[bool] = mapped_column(Boolean, default=False)
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=True)
 
-    forms = relationship("Form", back_populates="user", cascade="all, delete-orphan")
-    form_collaborators = relationship("FormCollaborator", back_populates="user", cascade="all, delete-orphan")
+    forms = relationship("Form", back_populates="user", foreign_keys="Form.owner_id", cascade="all, delete-orphan", passive_deletes=True)
+    form_collaborators = relationship("FormCollaborator", foreign_keys="FormCollaborator.user_id", back_populates="user", cascade="all, delete-orphan", passive_deletes=True)
     submissions = relationship("Submission", back_populates="user")
 
 class GuestSession(Base):
@@ -33,4 +33,4 @@ class GuestSession(Base):
     session_token: Mapped[str] = mapped_column(String, unique=True, nullable=False, default=lambda: secrets.token_urlsafe(32))
     expires_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), nullable=False)
 
-    forms = relationship("Form", back_populates="guest_session")
+    forms = relationship("Form", back_populates="guest_session", foreign_keys="Form.guest_session_id")

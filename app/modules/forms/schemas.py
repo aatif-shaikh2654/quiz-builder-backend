@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 from app.common.schema import APIResponse, ModelType
-from app.modules.forms.models import FieldType, FormStatus, FormType, LayoutType, SubmissionStatus
+from app.modules.forms.models import FieldType, FormStatus, FormType, LayoutType
 from uuid import UUID
 from datetime import datetime
 from decimal import Decimal
@@ -138,35 +138,3 @@ class UpdateQuizSettingsPayload(QuizSettingsType):
 class UpdateQuizSettingsResponse(APIResponse):
     data: QuizSettingsResponse
 
-# Publish form type
-class PublishFormResponse(APIResponse):
-    data: FormResponse
-
-# Save form types
-class SaveFormPayload(BaseModel):
-    title: str | None
-    description: str | None
-    sections: list[dict] | list[SectionResponse] | list[SectionsType] = []
-    fields: list[dict] | list[FieldsResponse] | list[FieldsType] = []
-
-class SaveFormResponse(APIResponse):
-    data: SingleForm
-
-# User Form submission
-class SubmissionType(ModelType):
-    form_id: UUID
-    respondent_id: UUID
-    response_number: int | None
-    status: SubmissionStatus
-    started_at: datetime
-    submitted_at: datetime
-    respondent_metadata: dict
-
-class AnswerResponse(BaseModel):
-    field_id: UUID
-    answer_text: str
-    answer_json: dict
-class SubmissionPayload(BaseModel):
-    respondent_metadata: dict
-    answers: list[AnswerResponse]
-    

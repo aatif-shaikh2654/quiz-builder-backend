@@ -1,8 +1,8 @@
-from fastapi import APIRouter, Request
+from fastapi import APIRouter
 from app.db.session import DbSession
 from app.modules.forms.schemas import (CreateFormPayload, CreateFormResponse, EditFormPayload,
-    EditFormResponse, GetAllFormsResponse, GetSingleFormResponse, PublishFormResponse,
-    SaveFormPayload, SaveFormResponse, SubmissionPayload, UpdateQuizSettingsPayload,
+    EditFormResponse, GetAllFormsResponse, GetSingleFormResponse,
+    UpdateQuizSettingsPayload,
     UpdateQuizSettingsResponse, UpdateSettingsPayload, UpdateSettingsResponse)
 from app.core.dependencies import GetGuestSession
 from app.modules.forms.service import (
@@ -14,9 +14,6 @@ from app.modules.forms.service import (
     update_quiz_settings_service, 
     delete_form_service, 
     delete_form_service,
-    publish_form_service,
-    save_draft_form_service,
-    submit_form_service
 )
 from app.common.schema import APIResponse
 from app.modules.forms.models import FormType
@@ -105,37 +102,4 @@ async def update_quiz_settings(form_id: str, payload: UpdateQuizSettingsPayload,
         "success": True,
         "message": "Quiz Setting updated successfully",
         "data": response
-    }
-
-@router.post("/{form_id}/publish", response_model=PublishFormResponse)
-async def publish_form(form_id: str, session: GetGuestSession, db: DbSession):
-
-    response = await publish_form_service(form_id, session, db)
-
-    return {
-        "success": True,
-        "message": "Form published successfully",
-        "data": response
-    }
-
-@router.put("/{form_id}/save-draft", response_model=SaveFormResponse)
-async def save_draft_form(form_id: str, payload: SaveFormPayload, session: GetGuestSession, db: DbSession):
-
-    response = await save_draft_form_service(form_id, payload, session, db)
-
-    return {
-        "success": True,
-        "message": "Form saved successfully",
-        "data": response
-    }
-
-
-@router.post("/{form_id}/submit", response_model=APIResponse)
-async def submit_form(form_id: str, payload: SubmissionPayload, session: GetGuestSession, db: DbSession):
-
-    await submit_form_service(form_id, payload, session, db)
-
-    return {
-        "success": True,
-        "message": "form submitted successfully"
     }
